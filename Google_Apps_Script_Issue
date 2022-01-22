@@ -1,0 +1,57 @@
+// Notes
+// We have been running this in chrome apps script v8 runtime
+// Chrome v8 runtime seems to breaks the script
+// The script says that its running (history) but it literaly doesnt move any data  
+
+var Looker = {
+  looks: {
+    //"Google_Sheet_Tab_Name": "from:email_address@company_name.com subject:Email_Subject_Line: Subject_Line_Text"
+    
+  },  
+  importCSVFromGmail_second: function(look, payload) {
+  // Search My Gmail for the string, and get the first attachment from the last message in the first thread it finds  
+  var threads = GmailApp.search(payload);
+  var messagecount = threads[0].getMessageCount()-1
+  var message = threads[0].getMessages()[messagecount];
+  var attachment = message.getAttachments()[0];
+  
+  // Check to see if the attachment is a CSV 
+  attachment.setContentTypeFromExtension();  
+  if (attachment.getContentType() === "text/csv") {
+    //Read the CSV
+    var csvData = Utilities.parseCsv(attachment.getDataAsString(), ",");
+    var workbook = SpreadsheetApp.getActiveSpreadsheet();
+    var lookSheet = workbook.getSheetByName(look);
+    if (!lookSheet) {var sheet = workbook.insertSheet(look,workbook.getNumSheets())}
+    else {var sheet = SpreadsheetApp.setActiveSheet(workbook.getSheetByName(look))}
+    sheet.clear().getRange(workbook.getLastRow()+1,1,csvData.length,csvData[0].length).setValues(csvData);
+    }
+  },  
+    refreshAll: function() {
+    for (item in menuItems) {
+      if (item <= 1) continue;
+      var look = menuItems[item].name.replace(/Refresh /,"");
+      Looker.importCSVFromGmail_second(look, Looker.looks[look]);
+    }
+  }  
+}
+
+var menuItems = new Array({name: "Refresh All", functionName: "refreshAll"}, null);
+for (var look in Looker.looks) {
+  var fn = look.replace(/\W+/g, "");
+  this["refresh" + fn] = eval(function() {Looker.refresh("' + look + '", Looker.looks["' + look + '"]);});
+  menuItems.push({name: "Refresh " + look, functionName: "refresh" + fn});
+}
+
+function refreshAll() {
+  Looker.refreshAll();
+}
+
+function onOpen() {
+  var e = SpreadsheetApp.getActiveSpreadsheet();
+  e.addMenu("DataRefresher", menuItems);
+}
+
+function onInstall(e) {
+  onOpen(e)
+}
